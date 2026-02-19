@@ -202,19 +202,86 @@ class BlackjackGame {
     }
   }
 
+  cardColor(suit: Suit): number {
+    return suit === '♥' || suit === '♦' ? 0xc61f1f : 0x111111;
+  }
+
+  pipLayout(rank: Rank): Array<{ x: number; y: number; flip?: boolean }> {
+    const midX = 41;
+    const left = 24;
+    const right = 58;
+    const top = 26;
+    const upperMid = 42;
+    const center = 61;
+    const lowerMid = 80;
+    const bottom = 96;
+
+    const map: Record<Exclude<Rank, 'A' | 'J' | 'Q' | 'K'>, Array<{ x: number; y: number; flip?: boolean }>> = {
+      '2': [{ x: midX, y: top }, { x: midX, y: bottom, flip: true }],
+      '3': [{ x: midX, y: top }, { x: midX, y: center }, { x: midX, y: bottom, flip: true }],
+      '4': [{ x: left, y: top }, { x: right, y: top }, { x: left, y: bottom, flip: true }, { x: right, y: bottom, flip: true }],
+      '5': [{ x: left, y: top }, { x: right, y: top }, { x: midX, y: center }, { x: left, y: bottom, flip: true }, { x: right, y: bottom, flip: true }],
+      '6': [{ x: left, y: top }, { x: right, y: top }, { x: left, y: center }, { x: right, y: center }, { x: left, y: bottom, flip: true }, { x: right, y: bottom, flip: true }],
+      '7': [{ x: left, y: top }, { x: right, y: top }, { x: midX, y: upperMid }, { x: left, y: center }, { x: right, y: center }, { x: left, y: bottom, flip: true }, { x: right, y: bottom, flip: true }],
+      '8': [{ x: left, y: top }, { x: right, y: top }, { x: left, y: upperMid }, { x: right, y: upperMid }, { x: left, y: lowerMid, flip: true }, { x: right, y: lowerMid, flip: true }, { x: left, y: bottom, flip: true }, { x: right, y: bottom, flip: true }],
+      '9': [{ x: left, y: top }, { x: right, y: top }, { x: midX, y: upperMid }, { x: left, y: center }, { x: right, y: center }, { x: left, y: lowerMid, flip: true }, { x: right, y: lowerMid, flip: true }, { x: left, y: bottom, flip: true }, { x: right, y: bottom, flip: true }],
+      '10': [{ x: left, y: top }, { x: right, y: top }, { x: midX, y: upperMid }, { x: left, y: upperMid }, { x: right, y: upperMid }, { x: left, y: lowerMid, flip: true }, { x: right, y: lowerMid, flip: true }, { x: midX, y: lowerMid, flip: true }, { x: left, y: bottom, flip: true }, { x: right, y: bottom, flip: true }],
+    };
+
+    if (rank === 'A') return [{ x: midX, y: center }];
+    if (rank === 'J' || rank === 'Q' || rank === 'K') return [{ x: midX, y: center }];
+    return map[rank as Exclude<Rank, 'A' | 'J' | 'Q' | 'K'>];
+  }
+
   createCardVisual(card: Card, hidden = false): CardSprite {
     const container = new Container();
-    const base = new Graphics().roundRect(0, 0, 82, 122, 10).fill(hidden ? 0x23448f : 0xffffff).stroke({ color: 0x1b1b1b, width: 2 });
+
+    const shadow = new Graphics().roundRect(2, 3, 82, 122, 10).fill({ color: 0x000000, alpha: 0.16 });
+    container.addChild(shadow);
+
+    const base = new Graphics().roundRect(0, 0, 82, 122, 10).fill(hidden ? 0x1e4ea1 : 0xffffff).stroke({ color: 0x7ea1d8, width: 1.2 });
     container.addChild(base);
 
-    if (!hidden) {
-      const red = card.suit === '♥' || card.suit === '♦';
-      const label = new Text({
-        text: `${card.rank}${card.suit}`,
-        style: { fill: red ? 0xc12525 : 0x101010, fontSize: 24, fontWeight: 'bold' },
-      });
-      label.position.set(9, 8);
-      container.addChild(label);
+    if (hidden) {
+      const pattern = new Graphics().roundRect(9, 9, 64, 104, 7).fill(0x315fd4).stroke({ color: 0xe7f0ff, width: 1.2 });
+      container.addChild(pattern);
+
+      for (let y = 16; y < 106; y += 10) {
+        const line = new Graphics().moveTo(13, y).lineTo(69, y).stroke({ color: 0xc8d9ff, width: 0.8, alpha: 0.45 });
+        container.addChild(line);
+      }
+    } else {
+      const color = this.cardColor(card.suit);
+      const cornerTop = new Text({ text: `${card.rank}
+${card.suit}`, style: { fill: color, fontSize: card.rank === '10' ? 16 : 18, fontWeight: 'bold', align: 'center' } });
+      cornerTop.position.set(6, 4);
+      container.addChild(cornerTop);
+
+      const cornerBottom = new Text({ text: `${card.rank}
+${card.suit}`, style: { fill: color, fontSize: card.rank === '10' ? 16 : 18, fontWeight: 'bold', align: 'center' } });
+      cornerBottom.anchor.set(0.5, 0.5);
+      cornerBottom.position.set(72, 110);
+      cornerBottom.rotation = Math.PI;
+      container.addChild(cornerBottom);
+
+      if (card.rank === 'J' || card.rank === 'Q' || card.rank === 'K') {
+        const portraitBg = new Graphics().roundRect(22, 25, 38, 72, 6).fill(0xf7f1de).stroke({ color: 0xc0a86f, width: 1 });
+        container.addChild(portraitBg);
+
+        const face = new Text({ text: `${card.rank}${card.suit}`, style: { fill: color, fontSize: 24, fontWeight: 'bold' } });
+        face.anchor.set(0.5, 0.5);
+        face.position.set(41, 61);
+        container.addChild(face);
+      } else {
+        const pips = this.pipLayout(card.rank);
+        pips.forEach((pip) => {
+          const pipTxt = new Text({ text: card.suit, style: { fill: color, fontSize: card.rank === 'A' ? 42 : 19, fontWeight: 'bold' } });
+          pipTxt.anchor.set(0.5, 0.5);
+          pipTxt.position.set(pip.x, pip.y);
+          if (pip.flip) pipTxt.rotation = Math.PI;
+          container.addChild(pipTxt);
+        });
+      }
     }
 
     this.table.addChild(container);
@@ -295,8 +362,17 @@ class BlackjackGame {
 
     this.activePlayerIndex = 0;
     this.phase = 'playerTurn';
-    this.message = `Player 1's turn.`;
 
+    for (const player of this.players) {
+      player.hands.forEach((hand) => {
+        if (isBlackjack(hand.cards)) {
+          hand.stood = true;
+        }
+      });
+    }
+
+    this.message = `Player 1's turn.`;
+    this.advanceTurnFromNaturals();
     this.layoutCards(true);
     this.render();
   }
@@ -378,6 +454,23 @@ class BlackjackGame {
     p.hands.splice(p.activeHandIndex + 1, 0, newHand);
     this.layoutCards(true);
     this.render();
+  }
+
+  advanceTurnFromNaturals() {
+    while (this.activePlayerIndex < this.players.length) {
+      const player = this.players[this.activePlayerIndex];
+      while (player.activeHandIndex < player.hands.length && player.hands[player.activeHandIndex].stood) {
+        player.activeHandIndex += 1;
+      }
+      if (player.activeHandIndex < player.hands.length) {
+        this.message = `Player ${this.activePlayerIndex + 1}'s turn.`;
+        return;
+      }
+      this.activePlayerIndex += 1;
+    }
+
+    this.phase = 'dealerTurn';
+    this.playDealer();
   }
 
   advanceTurn() {
@@ -517,7 +610,7 @@ class BlackjackGame {
 
     const p = this.currentPlayer();
     const hand = this.currentHand();
-    const canAct = this.phase === 'playerTurn';
+    const canAct = this.phase === 'playerTurn' && !!hand && !hand.stood && !hand.busted;
     const canConfig = this.phase === 'betting' || this.phase === 'roundOver';
 
     const canDouble = canAct && !!p && !!hand && hand.cards.length === 2 && p.bankroll >= hand.bet;
