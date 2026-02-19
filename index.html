@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blackjack - Pixi + Matter</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #052f1a; color: #fff; font-family: Inter, system-ui, sans-serif; }
+      #app { width: 100vw; height: 100vh; overflow: hidden; }
+      .hud {
+        position: fixed; left: 16px; top: 16px; right: 16px; display: flex; justify-content: space-between; gap: 8px; pointer-events: none;
+      }
+      .panel { background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 10px; padding: 10px 14px; }
+      .controls { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 960px; }
+      button { border: none; border-radius: 8px; padding: 10px 14px; font-size: 14px; background: #f0c14b; color: #111; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      #tutorialOverlay {
+        position: fixed; inset: 0; background: rgba(0, 0, 0, 0.86); display: flex; align-items: center; justify-content: center; z-index: 10;
+      }
+      #tutorialBox {
+        width: min(900px, 92vw); max-height: 86vh; overflow: auto; background: #0e3f2f; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 20px;
+      }
+      h1,h2 { margin: 0 0 10px; }
+      ul { margin-top: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div class="hud">
+      <div class="panel" id="status"></div>
+      <div class="panel" id="bankroll"></div>
+    </div>
+    <div class="controls" id="controls"></div>
+    <div id="tutorialOverlay">
+      <div id="tutorialBox">
+        <h1>Blackjack Tutorial</h1>
+        <p>Welcome to the table. You can <strong>Play Tutorial</strong> to walk through the rules, or <strong>Skip Tutorial</strong> and start immediately.</p>
+        <h2>Core Goal</h2>
+        <ul>
+          <li>Beat the dealer without going over 21.</li>
+          <li>Ace counts as 1 or 11.</li>
+          <li>Face cards are worth 10.</li>
+        </ul>
+        <h2>Official-style table rules implemented</h2>
+        <ul>
+          <li>6-deck shoe, shuffled at ~75% penetration.</li>
+          <li>Dealer stands on soft 17.</li>
+          <li>Blackjack pays 3:2 (unless dealer also has blackjack = push).</li>
+          <li>Double after split allowed.</li>
+          <li>Split pairs up to 3 hands (4 total).</li>
+          <li>Split aces receive one card each only.</li>
+          <li>Late surrender allowed (except after split).</li>
+          <li>Insurance offered when dealer upcard is Ace (2:1 payout).</li>
+          <li>Dealer peeks for blackjack with Ace/10 upcard.</li>
+        </ul>
+        <h2>Action Buttons</h2>
+        <ul>
+          <li>Deal: places base bet and starts a round.</li>
+          <li>Hit / Stand / Double / Split / Surrender / Insurance.</li>
+        </ul>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button id="playTutorial">Play Tutorial</button>
+          <button id="skipTutorial">Skip Tutorial</button>
+        </div>
+        <p id="tutorialStep" style="margin-top:12px;"></p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
