@@ -5,6 +5,8 @@ A browser blackjack game implementing casino-style rules with:
 - PixiJS rendering
 - Matter.js-driven card movement physics
 - Skippable in-game tutorial overlay on launch
+- 2, 3, or 4 players (choosable)
+- Starting money of **$1000 per player**
 
 ## Rules implemented
 
@@ -14,7 +16,7 @@ A browser blackjack game implementing casino-style rules with:
 - Dealer peek on Ace/10-value upcard
 - Insurance (2:1)
 - Late surrender (first decision only, non-split hand)
-- Split pairs up to 4 total hands
+- Split pairs up to 4 total hands per player
 - Double down including after split
 - Split aces receive one card each
 
@@ -30,19 +32,3 @@ npm run dev
 ```bash
 npm test
 ```
-
-## Put this code directly on `main` (no feature branch)
-
-```bash
-# from this repo
-
-git checkout -B main
-# if a remote already exists:
-# git remote set-url origin <your-repo-url>
-# otherwise:
-# git remote add origin <your-repo-url>
-
-git push -u origin main --force-with-lease
-```
-
-This publishes the current code directly to `main` instead of opening a branch PR.
