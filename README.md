@@ -1,24 +1,20 @@
-# Blackjack (TypeScript + PixiJS + Matter.js)
+# Blackjack Royale (TypeScript + PixiJS + Matter.js)
 
-A browser blackjack game implementing casino-style rules with:
+A browser blackjack game with a premium mobile-game style UI:
 
-- PixiJS rendering
-- Matter.js-driven card movement physics
-- Skippable in-game tutorial overlay on launch
+- Cinematic table HUD with modern control panel
+- PixiJS rendering + Matter.js motion physics for dealing cards
+- Skippable tutorial overlay on launch
 - 2, 3, or 4 players (choosable)
-- Starting money of **$1000 per player**
+- Starting money: **$1000 per player**
 
-## Rules implemented
+## Gameplay features
 
-- 6-deck shoe (auto reshuffle near 75% penetration)
+- 6-deck shoe with auto reshuffle at penetration
 - Dealer stands on soft 17
-- Blackjack pays 3:2
-- Dealer peek on Ace/10-value upcard
-- Insurance (2:1)
-- Late surrender (first decision only, non-split hand)
-- Split pairs up to 4 total hands per player
-- Double down including after split
-- Split aces receive one card each
+- Blackjack payout 3:2
+- Insurance, surrender, double, split support
+- Extra actions: **Stand All Hands**, **Rebet Last**, **All-In Current**, **New Shoe**, **Reset Session**
 
 ## Run
 
