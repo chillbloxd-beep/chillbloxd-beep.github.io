@@ -8,13 +8,22 @@ A browser blackjack game with a premium mobile-game style UI:
 - 2, 3, or 4 players (choosable)
 - Starting money: **$1000 per player**
 
-## Gameplay features
+## Core blackjack rules implemented
 
-- 6-deck shoe with auto reshuffle at penetration
-- Dealer stands on soft 17
-- Blackjack payout 3:2
-- Insurance, surrender, double, split support
-- Extra actions: **Stand All Hands**, **Rebet Last**, **All-In Current**, **New Shoe**, **Reset Session**
+- Number cards = face value; J/Q/K = 10; Ace = 1 or 11
+- Players and dealer receive 2 cards; dealer shows one card and hides one
+- Player actions: Hit, Stand, Double Down (one final card), Split pairs
+- Bust over 21 loses immediately
+- Dealer draws until reaching at least 17
+- Win by beating dealer without busting, or when dealer busts
+- Two-card 21 (blackjack) pays extra at 3:2
+
+## Extra table actions
+
+- Rebet Last
+- All-In Current
+- New Shoe
+- Reset Session
 
 ## Run
 

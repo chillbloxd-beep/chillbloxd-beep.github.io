@@ -8,53 +8,47 @@ type Card = { rank: Rank; suit: Suit };
 type Hand = {
   cards: Card[];
   bet: number;
-  isStanding: boolean;
-  isBusted: boolean;
-  isSurrendered: boolean;
+  stood: boolean;
+  busted: boolean;
+  doubled: boolean;
 };
 
 type PlayerState = {
   id: number;
   bankroll: number;
   baseBet: number;
-  insuranceBet: number;
+  lastBet: number;
   hands: Hand[];
   activeHandIndex: number;
-  lastBet: number;
 };
 
 type GamePhase = 'betting' | 'playerTurn' | 'dealerTurn' | 'roundOver';
 type CardSprite = { container: Container; body: Matter.Body; targetX: number; targetY: number };
 
 const STARTING_MONEY = 1000;
-const RULES = {
-  decks: 6,
-  shufflePenetration: 0.75,
-  dealerHitsSoft17: false,
-  blackjackPayout: 1.5,
-  maxHands: 4,
-  splitAcesOneCardOnly: true,
-  lateSurrender: true,
-  insurancePayout: 2,
-};
+const BLACKJACK_PAYOUT = 1.5;
+const MAX_SPLIT_HANDS = 4;
+const DECKS = 6;
 
 const SUITS: Suit[] = ['♠', '♥', '♦', '♣'];
 const RANKS: Rank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
 function cardValue(rank: Rank): number {
   if (rank === 'A') return 11;
-  if (['J', 'Q', 'K'].includes(rank)) return 10;
+  if (rank === 'K' || rank === 'Q' || rank === 'J') return 10;
   return Number(rank);
 }
 
 function handTotal(cards: Card[]): { best: number; soft: boolean } {
-  let total = cards.reduce((s, c) => s + cardValue(c.rank), 0);
-  let aces = cards.filter((c) => c.rank === 'A').length;
-  while (total > 21 && aces > 0) {
+  let total = cards.reduce((sum, card) => sum + cardValue(card.rank), 0);
+  let aceCount = cards.filter((card) => card.rank === 'A').length;
+
+  while (total > 21 && aceCount > 0) {
     total -= 10;
-    aces -= 1;
+    aceCount -= 1;
   }
-  return { best: total, soft: total <= 21 && aces > 0 };
+
+  return { best: total, soft: aceCount > 0 };
 }
 
 function isBlackjack(cards: Card[]): boolean {
@@ -65,16 +59,19 @@ class Shoe {
   cards: Card[] = [];
 
   constructor() {
-    this.build();
+    this.shuffle();
   }
 
-  build() {
+  shuffle() {
     this.cards = [];
-    for (let d = 0; d < RULES.decks; d += 1) {
+    for (let d = 0; d < DECKS; d += 1) {
       for (const suit of SUITS) {
-        for (const rank of RANKS) this.cards.push({ rank, suit });
+        for (const rank of RANKS) {
+          this.cards.push({ rank, suit });
+        }
       }
     }
+
     for (let i = this.cards.length - 1; i > 0; i -= 1) {
       const j = Math.floor(Math.random() * (i + 1));
       [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
@@ -82,11 +79,12 @@ class Shoe {
   }
 
   draw(): Card {
-    const threshold = RULES.decks * 52 * (1 - RULES.shufflePenetration);
-    if (this.cards.length < threshold) this.build();
-    const card = this.cards.pop();
-    if (!card) throw new Error('Shoe empty');
-    return card;
+    if (this.cards.length < 52) {
+      this.shuffle();
+    }
+    const next = this.cards.pop();
+    if (!next) throw new Error('No cards available');
+    return next;
   }
 }
 
@@ -101,8 +99,8 @@ class BlackjackGame {
 
   app!: Application;
   table!: Container;
-  cardSprites: CardSprite[] = [];
   staticLayer!: Container;
+  cardSprites: CardSprite[] = [];
   engine = Matter.Engine.create({ gravity: { x: 0, y: 0 } });
 
   statusEl = document.getElementById('status') as HTMLDivElement;
@@ -136,18 +134,12 @@ class BlackjackGame {
 
   drawTableBase() {
     this.staticLayer.removeChildren();
-
     const w = window.innerWidth;
     const h = window.innerHeight;
 
-    const rim = new Graphics().roundRect(18, 76, w - 36, h - 186, 38).fill(0x4e2d17);
-    this.staticLayer.addChild(rim);
-
+    const wood = new Graphics().roundRect(18, 76, w - 36, h - 186, 38).fill(0x4e2d17);
     const felt = new Graphics().roundRect(30, 88, w - 60, h - 210, 32).fill(0x0a6a4a);
-    this.staticLayer.addChild(felt);
-
-    const centerGlow = new Graphics().circle(w / 2, h / 2 + 40, Math.min(420, w * 0.3)).fill({ color: 0xffffff, alpha: 0.05 });
-    this.staticLayer.addChild(centerGlow);
+    const glow = new Graphics().circle(w / 2, h / 2 + 40, Math.min(420, w * 0.3)).fill({ color: 0xffffff, alpha: 0.05 });
 
     const title = new Text({
       text: 'BLACKJACK ROYALE',
@@ -155,35 +147,29 @@ class BlackjackGame {
     });
     title.anchor.set(0.5, 0.5);
     title.position.set(w / 2, 120);
+
+    this.staticLayer.addChild(wood);
+    this.staticLayer.addChild(felt);
+    this.staticLayer.addChild(glow);
     this.staticLayer.addChild(title);
   }
 
   resetPlayers() {
-    this.players = Array.from({ length: this.playerCount }, (_, idx) => ({
-      id: idx + 1,
+    this.players = Array.from({ length: this.playerCount }, (_, i) => ({
+      id: i + 1,
       bankroll: STARTING_MONEY,
       baseBet: 50,
-      insuranceBet: 0,
+      lastBet: 50,
       hands: [],
       activeHandIndex: 0,
-      lastBet: 50,
     }));
-    this.phase = 'betting';
     this.dealer = [];
     this.activePlayerIndex = 0;
-  }
-
-  setPlayerCount(count: number) {
-    if (!(this.phase === 'betting' || this.phase === 'roundOver')) return;
-    this.playerCount = count;
-    this.resetPlayers();
-    this.message = `${count} seats selected. Everyone starts with $${STARTING_MONEY}.`;
-    this.layoutCards(true);
-    this.render();
+    this.phase = 'betting';
   }
 
   makeHand(bet: number): Hand {
-    return { cards: [], bet, isStanding: false, isBusted: false, isSurrendered: false };
+    return { cards: [], bet, stood: false, busted: false, doubled: false };
   }
 
   currentPlayer(): PlayerState | undefined {
@@ -191,9 +177,18 @@ class BlackjackGame {
   }
 
   currentHand(): Hand | undefined {
-    const player = this.currentPlayer();
-    if (!player) return undefined;
-    return player.hands[player.activeHandIndex];
+    const p = this.currentPlayer();
+    if (!p) return undefined;
+    return p.hands[p.activeHandIndex];
+  }
+
+  setPlayerCount(count: number) {
+    if (this.phase !== 'betting' && this.phase !== 'roundOver') return;
+    this.playerCount = count;
+    this.resetPlayers();
+    this.message = `${count} seats ready. Each player starts with $${STARTING_MONEY}.`;
+    this.layoutCards(true);
+    this.render();
   }
 
   tick() {
@@ -209,22 +204,23 @@ class BlackjackGame {
 
   createCardVisual(card: Card, hidden = false): CardSprite {
     const container = new Container();
-    const cardBase = new Graphics().roundRect(0, 0, 82, 122, 10).fill(hidden ? 0x23448f : 0xffffff).stroke({ color: 0x1b1b1b, width: 2 });
-    container.addChild(cardBase);
+    const base = new Graphics().roundRect(0, 0, 82, 122, 10).fill(hidden ? 0x23448f : 0xffffff).stroke({ color: 0x1b1b1b, width: 2 });
+    container.addChild(base);
 
     if (!hidden) {
       const red = card.suit === '♥' || card.suit === '♦';
-      const text = new Text({
+      const label = new Text({
         text: `${card.rank}${card.suit}`,
         style: { fill: red ? 0xc12525 : 0x101010, fontSize: 24, fontWeight: 'bold' },
       });
-      text.position.set(9, 8);
-      container.addChild(text);
+      label.position.set(9, 8);
+      container.addChild(label);
     }
 
     this.table.addChild(container);
     const body = Matter.Bodies.rectangle(window.innerWidth / 2, -60, 82, 122, { frictionAir: 0.1 });
     Matter.World.add(this.engine.world, body);
+
     const sprite = { container, body, targetX: window.innerWidth / 2, targetY: 220 };
     this.cardSprites.push(sprite);
     return sprite;
@@ -242,12 +238,43 @@ class BlackjackGame {
     }
   }
 
+  rebetAll() {
+    if (this.phase !== 'betting' && this.phase !== 'roundOver') return;
+    for (const p of this.players) {
+      p.baseBet = Math.max(10, Math.min(p.bankroll, p.lastBet));
+    }
+    this.message = 'Rebet applied for all players.';
+    this.render();
+  }
+
+  allInCurrent() {
+    if (this.phase !== 'betting' && this.phase !== 'roundOver') return;
+    const p = this.currentPlayer() ?? this.players[0];
+    p.baseBet = p.bankroll;
+    this.message = `Player ${p.id} goes all-in ($${p.baseBet}).`;
+    this.render();
+  }
+
+  newShoeNow() {
+    this.shoe.shuffle();
+    this.message = 'A fresh shoe has been shuffled.';
+    this.render();
+  }
+
+  resetSessionMoney() {
+    if (this.phase !== 'betting' && this.phase !== 'roundOver') return;
+    this.resetPlayers();
+    this.layoutCards(true);
+    this.message = 'Session reset to $1000 each.';
+    this.render();
+  }
+
   dealRound() {
-    if (!(this.phase === 'betting' || this.phase === 'roundOver')) return;
+    if (this.phase !== 'betting' && this.phase !== 'roundOver') return;
 
     for (const p of this.players) {
       if (p.baseBet <= 0 || p.baseBet > p.bankroll) {
-        this.message = `Player ${p.id} has invalid bet.`;
+        this.message = `Player ${p.id} has an invalid bet.`;
         this.render();
         return;
       }
@@ -257,7 +284,6 @@ class BlackjackGame {
     for (const p of this.players) {
       p.lastBet = p.baseBet;
       p.bankroll -= p.baseBet;
-      p.insuranceBet = 0;
       p.hands = [this.makeHand(p.baseBet)];
       p.activeHandIndex = 0;
     }
@@ -269,13 +295,8 @@ class BlackjackGame {
 
     this.activePlayerIndex = 0;
     this.phase = 'playerTurn';
+    this.message = `Player 1's turn.`;
 
-    if (['A', '10', 'J', 'Q', 'K'].includes(this.dealer[0].rank) && isBlackjack(this.dealer)) {
-      this.resolveDealerBlackjack();
-      return;
-    }
-
-    this.message = `Player ${this.activePlayerIndex + 1} turn.`;
     this.layoutCards(true);
     this.render();
   }
@@ -284,12 +305,15 @@ class BlackjackGame {
     if (this.phase !== 'playerTurn') return;
     const hand = this.currentHand();
     if (!hand) return;
+
     hand.cards.push(this.shoe.draw());
-    if (handTotal(hand.cards).best > 21) {
-      hand.isBusted = true;
-      hand.isStanding = true;
+    const total = handTotal(hand.cards).best;
+    if (total > 21) {
+      hand.busted = true;
+      hand.stood = true;
       this.advanceTurn();
     }
+
     this.layoutCards(true);
     this.render();
   }
@@ -298,33 +322,30 @@ class BlackjackGame {
     if (this.phase !== 'playerTurn') return;
     const hand = this.currentHand();
     if (!hand) return;
-    hand.isStanding = true;
+
+    hand.stood = true;
     this.advanceTurn();
     this.render();
   }
 
-  standAllHands() {
+  doubleDown() {
     if (this.phase !== 'playerTurn') return;
-    const player = this.currentPlayer();
-    if (!player) return;
-    player.hands.forEach((h) => {
-      h.isStanding = true;
-    });
-    this.advanceTurn();
-    this.render();
-  }
-
-  double() {
-    if (this.phase !== 'playerTurn') return;
-    const player = this.currentPlayer();
+    const p = this.currentPlayer();
     const hand = this.currentHand();
-    if (!player || !hand || hand.cards.length !== 2 || player.bankroll < hand.bet) return;
+    if (!p || !hand) return;
 
-    player.bankroll -= hand.bet;
+    if (hand.cards.length !== 2 || p.bankroll < hand.bet) return;
+
+    p.bankroll -= hand.bet;
     hand.bet *= 2;
+    hand.doubled = true;
     hand.cards.push(this.shoe.draw());
-    if (handTotal(hand.cards).best > 21) hand.isBusted = true;
-    hand.isStanding = true;
+
+    if (handTotal(hand.cards).best > 21) {
+      hand.busted = true;
+    }
+
+    hand.stood = true;
     this.layoutCards(true);
     this.advanceTurn();
     this.render();
@@ -332,108 +353,50 @@ class BlackjackGame {
 
   split() {
     if (this.phase !== 'playerTurn') return;
-    const player = this.currentPlayer();
+    const p = this.currentPlayer();
     const hand = this.currentHand();
-    if (!player || !hand) return;
+    if (!p || !hand) return;
 
-    const pair = hand.cards.length === 2 && cardValue(hand.cards[0].rank) === cardValue(hand.cards[1].rank);
-    if (!pair || player.hands.length >= RULES.maxHands || player.bankroll < hand.bet) return;
+    const canSplit =
+      hand.cards.length === 2 &&
+      hand.cards[0].rank === hand.cards[1].rank &&
+      p.hands.length < MAX_SPLIT_HANDS &&
+      p.bankroll >= hand.bet;
 
-    player.bankroll -= hand.bet;
+    if (!canSplit) return;
+
+    p.bankroll -= hand.bet;
     const moved = hand.cards.pop();
     if (!moved) return;
 
     const newHand = this.makeHand(hand.bet);
     newHand.cards.push(moved);
+
     hand.cards.push(this.shoe.draw());
     newHand.cards.push(this.shoe.draw());
 
-    if (hand.cards[0].rank === 'A' && moved.rank === 'A' && RULES.splitAcesOneCardOnly) {
-      hand.isStanding = true;
-      newHand.isStanding = true;
-    }
-
-    player.hands.splice(player.activeHandIndex + 1, 0, newHand);
-    this.layoutCards(true);
-    this.render();
-  }
-
-  surrender() {
-    if (this.phase !== 'playerTurn' || !RULES.lateSurrender) return;
-    const player = this.currentPlayer();
-    const hand = this.currentHand();
-    if (!player || !hand) return;
-    if (hand.cards.length !== 2 || player.hands.length > 1) return;
-
-    hand.isSurrendered = true;
-    hand.isStanding = true;
-    player.bankroll += hand.bet / 2;
-    this.advanceTurn();
-    this.render();
-  }
-
-  insurance() {
-    if (this.phase !== 'playerTurn' || this.dealer[0].rank !== 'A') return;
-    const player = this.currentPlayer();
-    if (!player || player.insuranceBet > 0) return;
-
-    const side = Math.floor(player.baseBet / 2);
-    if (player.bankroll < side) return;
-
-    player.bankroll -= side;
-    player.insuranceBet = side;
-    this.message = `Player ${player.id} placed insurance.`;
-    this.render();
-  }
-
-  rebetAll() {
-    if (!(this.phase === 'betting' || this.phase === 'roundOver')) return;
-    this.players.forEach((p) => {
-      p.baseBet = Math.min(p.lastBet, p.bankroll);
-    });
-    this.message = 'Rebet applied to all seats.';
-    this.render();
-  }
-
-  allInCurrent() {
-    if (!(this.phase === 'betting' || this.phase === 'roundOver')) return;
-    const p = this.currentPlayer() ?? this.players[0];
-    p.baseBet = p.bankroll;
-    this.message = `Player ${p.id} is all-in for next round.`;
-    this.render();
-  }
-
-  newShoeNow() {
-    this.shoe.build();
-    this.message = 'New shoe shuffled.';
-    this.render();
-  }
-
-  resetSessionMoney() {
-    if (!(this.phase === 'betting' || this.phase === 'roundOver')) return;
-    this.resetPlayers();
-    this.message = 'Session reset. All players back to $1000.';
+    p.hands.splice(p.activeHandIndex + 1, 0, newHand);
     this.layoutCards(true);
     this.render();
   }
 
   advanceTurn() {
-    let player = this.currentPlayer();
-    if (!player) return;
+    let p = this.currentPlayer();
+    if (!p) return;
 
-    while (player.activeHandIndex < player.hands.length && player.hands[player.activeHandIndex].isStanding) {
-      player.activeHandIndex += 1;
+    while (p.activeHandIndex < p.hands.length && p.hands[p.activeHandIndex].stood) {
+      p.activeHandIndex += 1;
     }
 
-    while (player.activeHandIndex >= player.hands.length) {
+    while (p.activeHandIndex >= p.hands.length) {
       this.activePlayerIndex += 1;
-      player = this.currentPlayer();
-      if (!player) break;
+      p = this.currentPlayer();
+      if (!p) break;
 
-      while (player.activeHandIndex < player.hands.length && player.hands[player.activeHandIndex].isStanding) {
-        player.activeHandIndex += 1;
+      while (p.activeHandIndex < p.hands.length && p.hands[p.activeHandIndex].stood) {
+        p.activeHandIndex += 1;
       }
-      if (player.activeHandIndex < player.hands.length) break;
+      if (p.activeHandIndex < p.hands.length) break;
     }
 
     if (this.activePlayerIndex >= this.players.length) {
@@ -442,80 +405,56 @@ class BlackjackGame {
       return;
     }
 
-    this.message = `Player ${this.activePlayerIndex + 1} turn.`;
+    this.message = `Player ${this.activePlayerIndex + 1}'s turn.`;
     this.layoutCards(true);
-  }
-
-  resolveDealerBlackjack() {
-    const summary: string[] = [];
-
-    this.players.forEach((player) => {
-      const hand = player.hands[0];
-      const playerBJ = isBlackjack(hand.cards);
-      if (playerBJ) {
-        player.bankroll += hand.bet;
-        summary.push(`P${player.id}: Push`);
-      } else {
-        summary.push(`P${player.id}: Dealer BJ`);
-      }
-
-      if (player.insuranceBet > 0) {
-        player.bankroll += player.insuranceBet * (RULES.insurancePayout + 1);
-      }
-    });
-
-    this.phase = 'roundOver';
-    this.message = summary.join(' | ');
-    this.layoutCards(false);
-    this.render();
   }
 
   playDealer() {
     this.layoutCards(false);
-    while (true) {
-      const total = handTotal(this.dealer);
-      const hit = total.best < 17 || (total.best === 17 && total.soft && RULES.dealerHitsSoft17);
-      if (!hit) break;
+
+    while (handTotal(this.dealer).best < 17) {
       this.dealer.push(this.shoe.draw());
     }
+
     this.settle();
   }
 
   settle() {
-    const dealerTotal = handTotal(this.dealer).best;
+    const dealer = handTotal(this.dealer).best;
+    const dealerBust = dealer > 21;
     const dealerBJ = isBlackjack(this.dealer);
-    const dealerBust = dealerTotal > 21;
     const summary: string[] = [];
 
-    this.players.forEach((player) => {
-      player.hands.forEach((hand, idx) => {
-        if (hand.isSurrendered) {
-          summary.push(`P${player.id}H${idx + 1}: Surrender`);
-          return;
-        }
-        if (hand.isBusted) {
-          summary.push(`P${player.id}H${idx + 1}: Bust`);
-          return;
-        }
-
+    this.players.forEach((p) => {
+      p.hands.forEach((hand, idx) => {
         const total = handTotal(hand.cards).best;
-        if (isBlackjack(hand.cards) && !dealerBJ) {
-          player.bankroll += hand.bet * (1 + RULES.blackjackPayout);
-          summary.push(`P${player.id}H${idx + 1}: Blackjack`);
-        } else if (dealerBust || total > dealerTotal) {
-          player.bankroll += hand.bet * 2;
-          summary.push(`P${player.id}H${idx + 1}: Win`);
-        } else if (total === dealerTotal) {
-          player.bankroll += hand.bet;
-          summary.push(`P${player.id}H${idx + 1}: Push`);
-        } else {
-          summary.push(`P${player.id}H${idx + 1}: Lose`);
-        }
-      });
+        const playerBJ = isBlackjack(hand.cards);
 
-      if (dealerBJ && player.insuranceBet > 0) {
-        player.bankroll += player.insuranceBet * (RULES.insurancePayout + 1);
-      }
+        if (hand.busted) {
+          summary.push(`P${p.id}H${idx + 1}: Bust`);
+          return;
+        }
+
+        if (playerBJ && !dealerBJ) {
+          p.bankroll += hand.bet * (2 + BLACKJACK_PAYOUT - 1);
+          summary.push(`P${p.id}H${idx + 1}: Blackjack`);
+          return;
+        }
+
+        if (dealerBust || total > dealer) {
+          p.bankroll += hand.bet * 2;
+          summary.push(`P${p.id}H${idx + 1}: Win`);
+          return;
+        }
+
+        if (total === dealer) {
+          p.bankroll += hand.bet;
+          summary.push(`P${p.id}H${idx + 1}: Push`);
+          return;
+        }
+
+        summary.push(`P${p.id}H${idx + 1}: Lose`);
+      });
     });
 
     this.phase = 'roundOver';
@@ -548,10 +487,10 @@ class BlackjackGame {
         });
 
         const total = handTotal(hand.cards).best;
-        const activeMark = this.phase === 'playerTurn' && pIndex === this.activePlayerIndex && hIndex === player.activeHandIndex ? ' ◀' : '';
+        const active = this.phase === 'playerTurn' && pIndex === this.activePlayerIndex && hIndex === player.activeHandIndex;
 
         const label = new Text({
-          text: `Player ${player.id} Hand ${hIndex + 1}${activeMark}\nTotal: ${total}  Bet: $${hand.bet}`,
+          text: `Player ${player.id} Hand ${hIndex + 1}${active ? ' ◀' : ''}\nTotal: ${total}  Bet: $${hand.bet}`,
           style: { fill: 0xffffff, fontSize: 14, fontWeight: 'bold' },
         });
         label.position.set(120 + hIndex * 240, y + 124);
@@ -569,22 +508,27 @@ class BlackjackGame {
   }
 
   render() {
-    const playerRows = this.players
+    const rows = this.players
       .map((p) => `P${p.id}: <b>$${p.bankroll}</b> · Bet $${p.baseBet} · Last $${p.lastBet}`)
       .join('<br/>');
 
     this.statusEl.innerHTML = `<b>Phase:</b> ${this.phase}<br/><b>Table:</b> ${this.playerCount} players<br/><b>Message:</b> ${this.message}`;
-    this.bankrollEl.innerHTML = `<b>Bankrolls</b><br/>${playerRows}`;
+    this.bankrollEl.innerHTML = `<b>Bankrolls</b><br/>${rows}`;
 
-    const canAct = this.phase === 'playerTurn';
-    const player = this.currentPlayer();
+    const p = this.currentPlayer();
     const hand = this.currentHand();
-
-    const canDouble = canAct && !!player && !!hand && hand.cards.length === 2 && player.bankroll >= hand.bet;
-    const canSplit = canAct && !!player && !!hand && hand.cards.length === 2 && cardValue(hand.cards[0].rank) === cardValue(hand.cards[1].rank) && player.bankroll >= hand.bet && player.hands.length < RULES.maxHands;
-    const canSurrender = canAct && !!player && !!hand && hand.cards.length === 2 && player.hands.length === 1;
-    const canInsurance = canAct && this.dealer[0]?.rank === 'A' && !!player && player.insuranceBet === 0;
+    const canAct = this.phase === 'playerTurn';
     const canConfig = this.phase === 'betting' || this.phase === 'roundOver';
+
+    const canDouble = canAct && !!p && !!hand && hand.cards.length === 2 && p.bankroll >= hand.bet;
+    const canSplit =
+      canAct &&
+      !!p &&
+      !!hand &&
+      hand.cards.length === 2 &&
+      hand.cards[0].rank === hand.cards[1].rank &&
+      p.bankroll >= hand.bet &&
+      p.hands.length < MAX_SPLIT_HANDS;
 
     this.controlsEl.innerHTML = '';
 
@@ -604,11 +548,8 @@ class BlackjackGame {
     add('Deal', () => this.dealRound(), !canConfig);
     add('Hit', () => this.hit(), !canAct);
     add('Stand', () => this.stand(), !canAct);
-    add('Stand All', () => this.standAllHands(), !canAct, 'btn-secondary');
-    add('Double', () => this.double(), !canDouble);
+    add('Double', () => this.doubleDown(), !canDouble);
     add('Split', () => this.split(), !canSplit);
-    add('Surrender', () => this.surrender(), !canSurrender);
-    add('Insurance', () => this.insurance(), !canInsurance, 'btn-secondary');
 
     add('Bet -', () => {
       const target = this.currentPlayer() ?? this.players[0];
@@ -638,12 +579,12 @@ const playTutorialBtn = document.getElementById('playTutorial') as HTMLButtonEle
 const skipTutorialBtn = document.getElementById('skipTutorial') as HTMLButtonElement;
 
 const tutorialSlides = [
-  'Step 1: Select 2, 3, or 4 players. Every seat starts at $1000.',
-  'Step 2: Adjust bet for the active seat, then press Deal.',
-  'Step 3: Use actions: Hit, Stand, Double, Split, Surrender, Insurance.',
-  'Step 4: Advanced actions: Stand All, Rebet Last, All-In Current, New Shoe, Reset Session.',
-  'Step 5: Dealer resolves all hands after every player finishes.',
-  'You are ready. Press Skip Tutorial and enjoy Blackjack Royale.',
+  'Step 1: Players start with 2 cards. Dealer gets 2 cards, 1 hidden.',
+  'Step 2: Cards: number = face value, J/Q/K = 10, Ace = 1 or 11.',
+  'Step 3: Choose Hit or Stand. You may Double Down or Split pairs when allowed.',
+  'Step 4: Bust over 21 and that hand loses immediately.',
+  'Step 5: Dealer draws until reaching at least 17.',
+  'Step 6: Beat dealer without busting. Natural blackjack pays extra (3:2).',
 ];
 
 let tutorialIdx = 0;
