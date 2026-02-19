@@ -30,3 +30,19 @@ npm run dev
 ```bash
 npm test
 ```
+
+## Put this code directly on `main` (no feature branch)
+
+```bash
+# from this repo
+
+git checkout -B main
+# if a remote already exists:
+# git remote set-url origin <your-repo-url>
+# otherwise:
+# git remote add origin <your-repo-url>
+
+git push -u origin main --force-with-lease
+```
+
+This publishes the current code directly to `main` instead of opening a branch PR.
