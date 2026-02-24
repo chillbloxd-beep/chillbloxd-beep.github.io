@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blackjack Royale - Pixi + Matter</title>
+    <style>
+      :root {
+        --gold: #f8d87b;
+        --panel: rgba(13, 23, 31, 0.72);
+        --panel-border: rgba(248, 216, 123, 0.35);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        color: #fff;
+        font-family: 'Segoe UI', Inter, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 20% 20%, rgba(255,255,255,0.06), transparent 40%),
+          radial-gradient(circle at 80% 10%, rgba(255,255,255,0.04), transparent 35%),
+          #071d16;
+        overflow: hidden;
+      }
+
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image: url('https://images.unsplash.com/photo-1511193311914-0346f16efe90?auto=format&fit=crop&w=1800&q=80');
+        background-size: cover;
+        background-position: center;
+        opacity: 0.2;
+        filter: saturate(0.85) blur(1px);
+        z-index: -2;
+      }
+
+      #app { width: 100vw; height: 100vh; }
+
+      .top-bar {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 10px;
+        z-index: 20;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 16px;
+        backdrop-filter: blur(7px);
+        box-shadow: 0 12px 28px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.05);
+        padding: 12px 14px;
+      }
+
+      #status { font-size: 14px; line-height: 1.45; }
+      #bankroll { font-size: 13px; line-height: 1.4; }
+
+      .controls-wrap {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 10px;
+        width: min(1200px, calc(100vw - 20px));
+        background: rgba(5, 14, 18, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 18px;
+        padding: 10px;
+        z-index: 20;
+      }
+
+      .controls-title {
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #c8d5df;
+        margin: 2px 0 8px;
+      }
+
+      .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
+      button {
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 12px;
+        padding: 10px 13px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        background: linear-gradient(180deg, #ffd971 0%, #dea835 100%);
+        color: #15120a;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.4;
+        filter: grayscale(0.35);
+        cursor: not-allowed;
+      }
+
+      .btn-secondary {
+        background: linear-gradient(180deg, #7fd8ff 0%, #3aa2df 100%);
+      }
+
+      #tutorialOverlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.84);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+      }
+
+      #tutorialBox {
+        width: min(980px, 94vw);
+        max-height: 88vh;
+        overflow: auto;
+        background:
+          linear-gradient(160deg, rgba(16, 47, 40, 0.96), rgba(7, 22, 33, 0.96)),
+          url('https://images.unsplash.com/photo-1504275107627-0c2ba7a43dba?auto=format&fit=crop&w=1400&q=80');
+        background-size: cover;
+        border: 1px solid rgba(248, 216, 123, 0.35);
+        border-radius: 18px;
+        padding: 22px;
+      }
+
+      h1, h2 { margin: 0 0 10px; color: #ffe7ab; }
+      ul { margin: 6px 0 10px; }
+
+      @media (max-width: 780px) {
+        .top-bar { grid-template-columns: 1fr; }
+        .controls-wrap { bottom: 8px; }
+        button { padding: 9px 10px; font-size: 12px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div class="top-bar">
+      <div class="panel" id="status"></div>
+      <div class="panel" id="bankroll"></div>
+    </div>
+
+    <div class="controls-wrap">
+      <div class="controls-title">Table Controls</div>
+      <div class="controls" id="controls"></div>
+    </div>
+
+    <div id="tutorialOverlay">
+      <div id="tutorialBox">
+        <h1>Blackjack Royale Tutorial</h1>
+        <p>
+          Welcome to the premium table. You can walk through a quick tutorial or skip and play instantly.
+        </p>
+
+        <h2>Game Goal</h2>
+        <ul>
+          <li>Beat the dealer without busting over 21.</li>
+          <li>Ace is 1 or 11, face cards are 10.</li>
+          <li>Natural blackjack pays 3:2.</li>
+        </ul>
+
+        <h2>Advanced Table Features</h2>
+        <ul>
+          <li>2, 3, or 4 players selectable before each round.</li>
+          <li>Every player starts with $1000 bankroll.</li>
+          <li>Extra actions: Rebet Last, All-In, New Shoe, Reset Session.</li>
+          <li>Dealer draws to at least 17, and natural blackjack pays extra.</li>
+        </ul>
+
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap: wrap;">
+          <button id="playTutorial">Play Tutorial</button>
+          <button id="skipTutorial" class="btn-secondary">Skip Tutorial</button>
+        </div>
+        <p id="tutorialStep" style="margin-top:12px;"></p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
