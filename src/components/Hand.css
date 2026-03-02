@@ -1,0 +1,32 @@
+.hand {
+  margin: 32px 0;
+}
+
+.hand-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 0 8px;
+}
+
+.hand-label h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.score {
+  font-size: 32px;
+  font-weight: bold;
+  color: #ffd700;
+  min-width: 60px;
+  text-align: right;
+}
+
+.cards {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
